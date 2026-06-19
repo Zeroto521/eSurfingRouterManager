@@ -4,6 +4,7 @@
 // @version      43
 // @description  https://github.com/Zeroto521/eSurfingRouterManager
 // @author       40% (Zeroto521) via Gemini
+// @license      MIT
 // @match        http://192.168.1.1/*
 // ==/UserScript==
 
