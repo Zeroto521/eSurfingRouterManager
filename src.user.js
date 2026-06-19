@@ -2,10 +2,14 @@
 // @name         天翼路由器控制台
 // @namespace    http://tampermonkey.net/
 // @version      43
-// @description  https://github.com/Zeroto521/eSurfingRouterManager
+// @description  专为 2016 年代老旧天翼光猫（电信网关）打造的现代化前端UI。通过底层 API 嗅探、DOM 荧光染色溯源、`Chart.js` 原型链劫持等技术，接管并重构了原生极其简陋且 Bug 频出的光猫管理页面。
 // @author       40% (Zeroto521) via Gemini
 // @license      MIT
 // @match        http://192.168.1.1/*
+// @icon         data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🎛️</text></svg>
+// @license      MIT
+// @homepageURL  https://github.com/Zeroto521/eSurfingRouterManager
+// @supportURL   https://github.com/Zeroto521/eSurfingRouterManager/issues
 // ==/UserScript==
 
 (function () {
