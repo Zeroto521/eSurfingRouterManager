@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         天翼路由器控制台
 // @namespace    http://tampermonkey.net/
-// @version      43
+// @version      v0.1.0
 // @description  专为 2016 年代老旧天翼光猫（电信网关）打造的现代化前端UI。通过底层 API 嗅探、DOM 荧光染色溯源、`Chart.js` 原型链劫持等技术，接管并重构了原生极其简陋且 Bug 频出的光猫管理页面。
 // @author       40% (Zeroto521) via Gemini
 // @license      MIT
@@ -41,7 +41,7 @@
         bindLower: "0",         // 向下捆绑辅信道
         channel40: "6",         // 40M 强制居中信道
         channel20: "11",        // 20M 默认边缘信道
-        wl_power: "50",         // 信号强度
+        defaultPower: "100",    // 信号强度兜底值
       },
       UI: {
         panelWidth: "220px",
@@ -114,16 +114,23 @@
         exportFileName: "Tianyi_WiFi_Assets_",
         msgExportEmpty: "无设备标签数据可导出！",
         msgImportSuccess:
-          "✅ 成功恢复了 {count} 条设备记录！\n" +
-          "（若出现旧设备未绑定，双击名称输入框选择旧名即可自动补全）",
-        msgImportFail: "❌ 导入失败：JSON 格式不正确！",
+          "成功恢复了 {count} 条记录！\n(缺失的旧设备可双击表格输入框补全)",
+        msgImportFail: "导入失败：JSON 格式不正确！",
         msgScanEmpty:
-          "📡 扫描为空：请先点开【状态 -> 用户侧信息】页面以加载数据。",
+          "扫描为空：请先点击右上角【系统状态 -> 设备信息】页面加载数据。",
         msgRequireMenu:
-          "提示：找不到通信接口，请先点开左侧【网络 -> WLAN设置】页面。",
-        msgPromptSsid: "请输入新的 Wi-Fi 名称：",
-        msgPromptPwd: "请输入新的 Wi-Fi 密码（至少 8 位）：",
-        msgBandConfirm: "确定要锁定为 {mode}MHz 频宽吗？",
+          "未找到通信接口：请先点击右上角【高级设置 -> 网络设置 -> 无线配置】页面加载数据。",
+
+        lblSsid: "Wi-Fi 名称 (SSID)",
+        lblPwd: "Wi-Fi 密码 (至少 8 位)",
+        lblPower: "信号强度 (发射功率)",
+        btnCancel: "取消",
+        btnConfirm: "确定",
+        btnSaveReboot: "保存并下发配置",
+        msgSsidEmpty: "Wi-Fi 名称不能为空！",
+        msgPwdShort: "密码不能少于 8 位！",
+
+        msgBandConfirm: "确定要将无线频宽锁定为 {mode}MHz 吗？",
         chartLoading: "数据收集中...",
 
         freezeIcon: "🔄",
@@ -186,6 +193,7 @@
             box-shadow: 0 4px 24px rgba(0,0,0,0.1);
             width: ${TY_CONF.UI.modalWidth};
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            box-sizing: border-box; animation: ty-fade-in 0.2s ease-out;
           }
           .ty-table {
             width: 100%; text-align: left; border-collapse: collapse;
@@ -212,7 +220,7 @@
           }
           .ty-edit {
             width: 100%; border: 1px solid ${TY_CONF.COLORS.theme};
-            padding: 3px; border-radius: 4px; font-family: inherit;
+            padding: 5px; border-radius: 4px; font-family: inherit;
             font-size: 13px; box-sizing: border-box; outline: none;
           }
           .ty-mac-text {
@@ -225,13 +233,97 @@
           @keyframes ty-spin {
             100% { transform: rotate(360deg); }
           }
+          @keyframes ty-fade-in {
+            from { opacity: 0; transform: translate(-50%, -45%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+          }
         `;
         document.head.appendChild(style);
       }
     }
 
     // ==========================================
-    // 3. 本地资产数据库
+    // 3. 全局弹窗与交互引擎 (TY_UI)
+    // ==========================================
+    class TY_UI {
+      static toast(message, type = 'info', duration = 2500) {
+        let existing = document.getElementById('ty-toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.id = 'ty-toast';
+        toast.className = 'ty-modal';
+        toast.style.cssText = `
+          width: 300px; padding: 20px; text-align: center;
+          z-index: 99999999; animation: ty-fade-in 0.2s ease-out;
+        `;
+
+        let icon = '💡';
+        if (type === 'success') icon = '✅';
+        if (type === 'error') icon = '❌';
+        if (type === 'warning') icon = '⚠️';
+
+        toast.innerHTML = `
+          <div style="font-size: 28px; margin-bottom: 12px;">${icon}</div>
+          <div style="color: ${TY_CONF.COLORS.textMain}; font-size: 14px;
+            line-height: 1.5; font-weight: 500;">
+            ${message.replace(/\n/g, '<br>')}
+          </div>
+        `;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+          if (toast.parentNode) {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+          }
+        }, duration);
+      }
+
+      static confirm(message, onConfirm) {
+        let existing = document.getElementById('ty-confirm');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'ty-confirm';
+        modal.className = 'ty-modal';
+        modal.style.cssText = `
+          width: 320px; padding: 24px; z-index: 99999999;
+          animation: ty-fade-in 0.2s ease-out;
+        `;
+
+        modal.innerHTML = `
+          <div style="color: ${TY_CONF.COLORS.textMain}; font-size: 15px;
+            margin-bottom: 24px; line-height: 1.5; text-align: center;
+            font-weight: 500;">
+            ${message.replace(/\n/g, '<br>')}
+          </div>
+          <div style="display: flex; justify-content: center; gap: 12px;">
+            <button id="ty-confirm-cancel" class="ty-btn"
+              style="width: 100px; background: none; justify-content: center;
+              border: 1px solid ${TY_CONF.COLORS.borderDark};">
+              ${TY_CONF.TEXT.btnCancel}
+            </button>
+            <button id="ty-confirm-ok" class="ty-btn"
+              style="width: 100px; background: ${TY_CONF.COLORS.theme};
+              justify-content: center; color: white; border: none;">
+              ${TY_CONF.TEXT.btnConfirm}
+            </button>
+          </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById('ty-confirm-cancel').onclick = () => modal.remove();
+        document.getElementById('ty-confirm-ok').onclick = () => {
+          modal.remove();
+          onConfirm();
+        };
+      }
+    }
+
+    // ==========================================
+    // 4. 本地资产数据库 (DeviceStorage)
     // ==========================================
     class DeviceStorage {
       static normalizeMac(mac) {
@@ -269,7 +361,7 @@
                   this.saveProfile(normMac, saved);
                   return saved;
                 }
-              } catch (e) {}
+              } catch (e) { }
             }
           }
         }
@@ -291,7 +383,7 @@
             try {
               let saved = JSON.parse(localStorage.getItem(key));
               if (saved.name) names.add(saved.name);
-            } catch (e) {}
+            } catch (e) { }
           }
         }
         return Array.from(names);
@@ -304,7 +396,7 @@
             try {
               let saved = JSON.parse(localStorage.getItem(key));
               if (saved.name === name) return saved;
-            } catch (e) {}
+            } catch (e) { }
           }
         }
         return null;
@@ -319,7 +411,7 @@
           }
         }
         if (Object.keys(data).length === 0) {
-          alert(TY_CONF.TEXT.msgExportEmpty);
+          TY_UI.toast(TY_CONF.TEXT.msgExportEmpty, 'warning');
           return;
         }
         let blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -346,10 +438,12 @@
                 count++;
               }
             }
-            alert(TY_CONF.TEXT.msgImportSuccess.replace('{count}', count));
+            TY_UI.toast(
+              TY_CONF.TEXT.msgImportSuccess.replace('{count}', count), 'success'
+            );
             if (callback) callback();
           } catch (err) {
-            alert(TY_CONF.TEXT.msgImportFail);
+            TY_UI.toast(TY_CONF.TEXT.msgImportFail, 'error');
           }
         };
         reader.readAsText(file);
@@ -357,7 +451,7 @@
     }
 
     // ==========================================
-    // 4. Iframe 跨域通讯与时空冻结引擎
+    // 5. Iframe 跨域通讯与时空冻结引擎 (WifiOperator)
     // ==========================================
     class WifiOperator {
       static getWindows(win = window.top, winArray = []) {
@@ -370,7 +464,7 @@
               }
             }
           }
-        } catch (e) {}
+        } catch (e) { }
         return winArray;
       }
 
@@ -385,7 +479,7 @@
                 if (dmStr.includes('ssid') || dmStr.includes('wpa')) return w;
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         }
         return targetWin;
       }
@@ -393,14 +487,14 @@
       static executeWithFreeze(apiWin, payload) {
         for (let w of this.getWindows()) {
           try {
-            let highestTimeoutId = w.setTimeout(() => {}, 0);
+            let highestTimeoutId = w.setTimeout(() => { }, 0);
             for (let i = 0; i <= highestTimeoutId; i++) {
               w.clearTimeout(i);
               w.clearInterval(i);
             }
-            w.alert = () => {};
-            if (w.$ && w.$.MsgBox) w.$.MsgBox.Alert = () => {};
-          } catch (e) {}
+            w.alert = () => { };
+            if (w.$ && w.$.MsgBox) w.$.MsgBox.Alert = () => { };
+          } catch (e) { }
         }
 
         let overlay = document.createElement('div');
@@ -438,14 +532,14 @@
         document.body.appendChild(overlay);
 
         try {
-          apiWin.setAppData("save", payload, function () {});
-        } catch (e) {}
+          apiWin.setAppData("save", payload, function () { });
+        } catch (e) { }
       }
 
       static renameWifi() {
         let apiWin = this.getApiWindow();
         if (!apiWin) {
-          alert(TY_CONF.TEXT.msgRequireMenu);
+          TY_UI.toast(TY_CONF.TEXT.msgRequireMenu, 'warning');
           return;
         }
         let dm = (apiWin.$ && apiWin.$.DataMap) ? apiWin.$.DataMap : {};
@@ -464,35 +558,122 @@
           return "";
         };
 
-        let promptName = findVal(dm, ['ssid', 'SSID']);
-        var newSsid = prompt(TY_CONF.TEXT.msgPromptSsid, promptName);
-        if (!newSsid) return;
-
-        let promptPwd = findVal(
+        let currentSsid = findVal(dm, ['ssid', 'SSID']);
+        let currentPwd = findVal(
           dm, ['key_wpa', 'wpa_psk', 'WPAKey', 'key_passphrase']
         );
-        var newPwd = prompt(TY_CONF.TEXT.msgPromptPwd, promptPwd);
-        if (!newPwd || newPwd.length < 8) return;
+        let currentPower = findVal(
+          dm, ['wl_power', 'tx_power', 'PowerLevel']
+        ) || TY_CONF.API.defaultPower;
 
-        let payload = Object.assign({}, dm);
-        payload.wl_disabled = TY_CONF.API.wlanDisabled;
-        payload.ssid = newSsid.trim();
-        payload.SSID = newSsid.trim();
-        payload.sec_mode = TY_CONF.API.secMode;
-        payload.encryption = TY_CONF.API.encryption;
-        payload.wl_power = TY_CONF.API.wl_power;
-        payload.key_wpa = newPwd;
-        payload.wpa_psk = newPwd;
-        payload.WPAKey = newPwd;
-        payload.key_passphrase = newPwd;
+        if (document.getElementById('wifi-config-modal')) {
+          document.getElementById('wifi-config-modal').remove();
+        }
 
-        this.executeWithFreeze(apiWin, payload);
+        const modal = document.createElement('div');
+        modal.id = 'wifi-config-modal';
+        modal.className = 'ty-modal';
+        modal.style.width = '380px';
+
+        modal.innerHTML = `
+          <div style="border-bottom: 1px solid ${TY_CONF.COLORS.borderLight};
+            padding-bottom: 12px; margin-bottom: 16px;">
+            <h3 style="margin: 0; color: ${TY_CONF.COLORS.textMain};
+              font-size: 16px; font-weight: 500;">
+              ${TY_CONF.TEXT.menuRename.icon} ${TY_CONF.TEXT.menuRename.text}
+            </h3>
+          </div>
+
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; font-size: 12px; margin-bottom: 6px;
+              color: ${TY_CONF.COLORS.textSub};">
+              ${TY_CONF.TEXT.lblSsid}
+            </label>
+            <input type="text" id="ty-wifi-ssid" class="ty-edit"
+              style="padding: 6px;" value="${currentSsid}">
+          </div>
+
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; font-size: 12px; margin-bottom: 6px;
+              color: ${TY_CONF.COLORS.textSub};">
+              ${TY_CONF.TEXT.lblPwd}
+            </label>
+            <input type="text" id="ty-wifi-pwd" class="ty-edit"
+              style="padding: 6px;" value="${currentPwd}">
+          </div>
+
+          <div style="margin-bottom: 24px;">
+            <label style="display: block; font-size: 12px; margin-bottom: 6px;
+              color: ${TY_CONF.COLORS.textSub};">
+              ${TY_CONF.TEXT.lblPower}
+            </label>
+            <select id="ty-wifi-power" class="ty-edit"
+              style="height: 32px; padding: 4px; background: ${TY_CONF.COLORS.bgMain};">
+              <option value="15">20% (极低发热)</option>
+              <option value="25">40% (低功耗)</option>
+              <option value="50">60% (均衡模式)</option>
+              <option value="75">80% (广覆盖)</option>
+              <option value="100">100% (穿墙满血)</option>
+            </select>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button id="ty-wifi-cancel" class="ty-btn"
+              style="width: auto; background: none;
+              border: 1px solid ${TY_CONF.COLORS.borderDark};">
+              ${TY_CONF.TEXT.btnCancel}
+            </button>
+            <button id="ty-wifi-save" class="ty-btn"
+              style="width: auto; background: ${TY_CONF.COLORS.theme};
+              color: white; border: none;">
+              ${TY_CONF.TEXT.btnSaveReboot}
+            </button>
+          </div>
+        `;
+        document.body.appendChild(modal);
+
+        let powerSelect = document.getElementById('ty-wifi-power');
+        if (Array.from(powerSelect.options).some(opt => opt.value === currentPower)) {
+          powerSelect.value = currentPower;
+        }
+
+        document.getElementById('ty-wifi-cancel').onclick = () => modal.remove();
+
+        document.getElementById('ty-wifi-save').onclick = () => {
+          let newSsid = document.getElementById('ty-wifi-ssid').value.trim();
+          let newPwd = document.getElementById('ty-wifi-pwd').value;
+          let newPower = document.getElementById('ty-wifi-power').value;
+
+          if (!newSsid) {
+            TY_UI.toast(TY_CONF.TEXT.msgSsidEmpty, 'error');
+            return;
+          }
+          if (!newPwd || newPwd.length < 8) {
+            TY_UI.toast(TY_CONF.TEXT.msgPwdShort, 'error');
+            return;
+          }
+
+          let payload = Object.assign({}, dm);
+          payload.wl_disabled = TY_CONF.API.wlanDisabled;
+          payload.ssid = newSsid;
+          payload.SSID = newSsid;
+          payload.sec_mode = TY_CONF.API.secMode;
+          payload.encryption = TY_CONF.API.encryption;
+          payload.wl_power = newPower;
+          payload.key_wpa = newPwd;
+          payload.wpa_psk = newPwd;
+          payload.WPAKey = newPwd;
+          payload.key_passphrase = newPwd;
+
+          modal.remove();
+          this.executeWithFreeze(apiWin, payload);
+        };
       }
 
       static setChannelWidth(mode) {
         let apiWin = this.getApiWindow();
         if (!apiWin) {
-          alert(TY_CONF.TEXT.msgRequireMenu);
+          TY_UI.toast(TY_CONF.TEXT.msgRequireMenu, 'warning');
           return;
         }
         let payload = Object.assign(
@@ -509,13 +690,14 @@
           payload.channel = TY_CONF.API.channel20;
         }
 
-        if (!confirm(TY_CONF.TEXT.msgBandConfirm.replace('{mode}', mode))) return;
-        this.executeWithFreeze(apiWin, payload);
+        TY_UI.confirm(TY_CONF.TEXT.msgBandConfirm.replace('{mode}', mode), () => {
+          this.executeWithFreeze(apiWin, payload);
+        });
       }
     }
 
     // ==========================================
-    // 5. Chart.js 数据拦截与平滑处理引擎
+    // 6. Chart.js 数据拦截与平滑处理引擎
     // ==========================================
     class ChartManager {
       static formatSpeed(val) {
@@ -655,14 +837,14 @@
                 Object.assign(w.Chart, OriginalChart);
                 w.Chart._ty_patched = true;
               }
-            } catch (e) {}
+            } catch (e) { }
           }
         }, TY_CONF.SYS.hookInterval);
       }
     }
 
     // ==========================================
-    // 6. DOM 荧光染色溯源猎杀算法
+    // 7. DOM 荧光染色溯源猎杀算法
     // ==========================================
     class DomHijacker {
       static syncNow() {
@@ -676,7 +858,7 @@
                 if (Array.isArray(w.$.DataMap[key])) {
                   w.$.DataMap[key].forEach(item => {
                     let mac = item.MACAddress || item.mac ||
-                              item.Mac || item.MAC;
+                      item.Mac || item.MAC;
                     let ip = item.IPAddress || item.ip || item.IP;
                     let host = item.HostName || item.hostname || item.DeviceName;
 
@@ -689,7 +871,7 @@
                 }
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         let origSet = new Set(
@@ -736,11 +918,11 @@
             let getDisplayStr = (mac) => {
               let profile = DeviceStorage.getProfile(mac);
               let hasCustom = profile.name || profile.brand ||
-                              profile.type || profile.os;
+                profile.type || profile.os;
               if (!hasCustom) return null;
 
               let namePart = profile.name || globalMacToOrig[mac] ||
-                             TY_CONF.DICT.unknownDevice;
+                TY_CONF.DICT.unknownDevice;
               let extras = [profile.brand, profile.type, profile.os].filter(Boolean);
 
               if (extras.length === 0) return namePart;
@@ -808,7 +990,7 @@
             inputs.forEach(inp =>
               processNode(inp.value, v => (inp.value = v), inp)
             );
-          } catch (e) {}
+          } catch (e) { }
         }
       }
 
@@ -839,7 +1021,7 @@
                   TY_CONF.DICT.downBandRaw, TY_CONF.DICT.downBandClean
                 );
               }
-            } catch (e) {}
+            } catch (e) { }
           }
           this.syncNow();
         }, TY_CONF.SYS.monitorInterval);
@@ -847,7 +1029,7 @@
     }
 
     // ==========================================
-    // 7. 设备资产控制雷达
+    // 8. 设备资产控制雷达
     // ==========================================
     class RadarModal {
       static scanAndRender() {
@@ -861,7 +1043,7 @@
                 if (Array.isArray(w.$.DataMap[key])) {
                   w.$.DataMap[key].forEach(item => {
                     let mac = item.MACAddress || item.mac ||
-                              item.Mac || item.MAC;
+                      item.Mac || item.MAC;
                     let ip = item.IPAddress || item.ip || item.IP;
                     let host = item.HostName || item.hostname || item.DeviceName;
                     if (mac && ip && !macSet.has(mac)) {
@@ -872,7 +1054,7 @@
                 }
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         if (rawDevices.length === 0) {
@@ -894,12 +1076,12 @@
                   }
                 });
               }
-            } catch (e) {}
+            } catch (e) { }
           }
         }
 
         if (rawDevices.length === 0) {
-          alert(TY_CONF.TEXT.msgScanEmpty);
+          TY_UI.toast(TY_CONF.TEXT.msgScanEmpty, 'warning');
           return;
         }
         this.render(rawDevices);
@@ -1112,7 +1294,7 @@
     }
 
     // ==========================================
-    // 8. 控制台总装调度
+    // 9. 控制台总装调度
     // ==========================================
     class TianyiController {
       constructor() {
