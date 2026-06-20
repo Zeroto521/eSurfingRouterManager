@@ -9,7 +9,7 @@
 // @icon         data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🎛️</text></svg>
 // @license      MIT
 // @homepageURL  https://github.com/Zeroto521/eSurfingRouterManager
-// @supportURL   https://github.com/Zeroto521/eSurfingRouterManager/issues
+// @supportURL   https://github.com/Zeroto521/eSurfingRouterManager
 // ==/UserScript==
 
 (function () {
@@ -34,13 +34,14 @@
       },
       API: {
         wlanDisabled: "0",
-        secMode: "4",           // WPA2 加密模式
+        secMode: "3",           // WPA2 加密模式
         encryption: "aes",      // AES 算法
         width40: "1",           // 40MHz 标识
         width20: "0",           // 20MHz 标识
         bindLower: "0",         // 向下捆绑辅信道
         channel40: "6",         // 40M 强制居中信道
         channel20: "11",        // 20M 默认边缘信道
+        wl_power: "50",         // 信号强度
       },
       UI: {
         panelWidth: "220px",
@@ -479,6 +480,7 @@
         payload.SSID = newSsid.trim();
         payload.sec_mode = TY_CONF.API.secMode;
         payload.encryption = TY_CONF.API.encryption;
+        payload.wl_power = TY_CONF.API.wl_power;
         payload.key_wpa = newPwd;
         payload.wpa_psk = newPwd;
         payload.WPAKey = newPwd;
@@ -914,7 +916,7 @@
 
         const buildCell = (field, val, ph, isName) => `
           <td class="ty-td ty-editable" data-field="${field}" data-orig="${orig}">
-            <div class="ty-view view-${field}">${val || (field==='name'?orig:'-')}</div>
+            <div class="ty-view view-${field}">${val || (field === 'name' ? orig : '-')}</div>
             <input type="text" class="ty-edit in-${field}"
               ${isName ? 'list="ty-history-names"' : ''}
               style="display:none;" value="${val}" placeholder="${ph}">
