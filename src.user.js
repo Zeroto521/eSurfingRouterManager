@@ -2,7 +2,7 @@
 // @name         天翼路由器控制台
 // @namespace    http://tampermonkey.net/
 // @version      v0.1.0
-// @description  专为 2016 年代老旧天翼光猫（电信网关）打造的现代化前端UI。通过底层 API 嗅探、DOM 荧光染色溯源、`Chart.js` 原型链劫持等技术，接管并重构了原生极其简陋且 Bug 频出的光猫管理页面。
+// @description  专为 2016 年代老旧天翼光猫（电信网关）打造的现代化前端UI，接管并重构了原生极其简陋且 Bug 频出的光猫管理页面。
 // @author       40% (Zeroto521) via Gemini
 // @license      MIT
 // @match        http://192.168.1.1/*
@@ -21,10 +21,10 @@
     // ==========================================
     // 1. 全局配置与常量数据池
     // ==========================================
-    const TY_CONF = {
+    const ES_CONF = {
       SYS: {
-        dbPrefix: "TY_WIFI_DEV_",
-        panelCollapsedKey: "TY_PANEL_COLLAPSED",
+        dbPrefix: "ES_WIFI_DEV_",
+        panelCollapsedKey: "ES_PANEL_COLLAPSED",
         chartId: "default_chart",
         maxChartPoints: 1000,
         hideDotThreshold: 40,
@@ -34,13 +34,13 @@
       },
       API: {
         wlanDisabled: "0",
-        secMode: "3",           // WPA2 加密模式
-        encryption: "aes",      // AES 算法
+        secMode: "3",           // WPA2 纯净加密模式
+        encryption: "aes",      // AES 硬件加速算法
         width40: "1",           // 40MHz 标识
         width20: "0",           // 20MHz 标识
         bindLower: "0",         // 向下捆绑辅信道
-        channel40: "6",         // 40M 强制居中信道
-        channel20: "11",        // 20M 默认边缘信道
+        channel40: "6",         // 40M 强制居中信道(避开干扰)
+        channel20: "0",         // 20M 设为自动分配(安全兜底)
         defaultPower: "100",    // 信号强度兜底值
       },
       UI: {
@@ -111,15 +111,20 @@
 
         btnCopy: "📄 复制",
         msgCopied: "✅ 已复制",
-        exportFileName: "Tianyi_WiFi_Assets_",
+        exportFileName: "eSurfing_WiFi_Assets_",
         msgExportEmpty: "无设备标签数据可导出！",
         msgImportSuccess:
           "成功恢复了 {count} 条记录！\n(缺失的旧设备可双击表格输入框补全)",
         msgImportFail: "导入失败：JSON 格式不正确！",
+
         msgScanEmpty:
           "扫描为空：请先点击右上角【系统状态 -> 设备信息】页面加载数据。",
         msgRequireMenu:
           "未找到通信接口：请先点击右上角【高级设置 -> 网络设置 -> 无线配置】页面加载数据。",
+        msgRenameWait:
+          "提示：旧参数暂未加载完成，但您可直接输入新名称和密码进行强行覆盖。",
+        msgBandWait:
+          "数据未加载！强行切换频宽将导致彻底断网。\n请点击右上角【高级设置 -> 网络设置 -> 无线配置】等待数据刷新后重试！",
 
         lblSsid: "Wi-Fi 名称 (SSID)",
         lblPwd: "Wi-Fi 密码 (至少 8 位)",
@@ -147,93 +152,93 @@
     // ==========================================
     class StyleManager {
       static inject() {
-        if (document.getElementById('ty-global-styles')) return;
+        if (document.getElementById('es-global-styles')) return;
         const style = document.createElement('style');
-        style.id = 'ty-global-styles';
+        style.id = 'es-global-styles';
         style.textContent = `
-          .ty-panel {
+          .es-panel {
             position: fixed; bottom: 30px; right: 30px; z-index: 999998;
-            background: ${TY_CONF.COLORS.bgMain};
-            border: 1px solid ${TY_CONF.COLORS.borderDark};
+            background: ${ES_CONF.COLORS.bgMain};
+            border: 1px solid ${ES_CONF.COLORS.borderDark};
             border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            width: ${TY_CONF.UI.panelWidth}; transition: height 0.25s ease;
+            width: ${ES_CONF.UI.panelWidth}; transition: height 0.25s ease;
             box-sizing: border-box; overflow: hidden;
           }
-          .ty-panel-header {
+          .es-panel-header {
             display: flex; align-items: center; width: 100%;
             padding: 12px 16px 12px 28px; box-sizing: border-box;
             cursor: pointer; user-select: none; transition: background 0.2s;
           }
-          .ty-panel-header:hover {
-            background: ${TY_CONF.COLORS.bgHover};
+          .es-panel-header:hover {
+            background: ${ES_CONF.COLORS.bgHover};
           }
-          .ty-btn {
-            padding: 8px 12px; color: ${TY_CONF.COLORS.textMain};
-            border: 1px solid ${TY_CONF.COLORS.borderDark};
-            border-radius: 4px; background: ${TY_CONF.COLORS.bgHover};
+          .es-btn {
+            padding: 8px 12px; color: ${ES_CONF.COLORS.textMain};
+            border: 1px solid ${ES_CONF.COLORS.borderDark};
+            border-radius: 4px; background: ${ES_CONF.COLORS.bgHover};
             cursor: pointer; font-size: 13px; font-weight: 500;
             display: flex; align-items: center; width: 100%;
             box-sizing: border-box; margin: 0; outline: none;
             transition: background 0.2s;
           }
-          .ty-btn:hover { background: #f1f3f4; }
-          .ty-btn:active { background: ${TY_CONF.COLORS.bgActive}; }
-          .ty-link-btn {
-            background: none; border: none; color: ${TY_CONF.COLORS.theme};
+          .es-btn:hover { background: #f1f3f4; }
+          .es-btn:active { background: ${ES_CONF.COLORS.bgActive}; }
+          .es-link-btn {
+            background: none; border: none; color: ${ES_CONF.COLORS.theme};
             cursor: pointer; font-size: 13px; font-weight: 500;
             margin-right: 12px;
           }
-          .ty-modal {
+          .es-modal {
             position: fixed; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            background: ${TY_CONF.COLORS.bgMain};
-            border: 1px solid ${TY_CONF.COLORS.borderDark};
+            background: ${ES_CONF.COLORS.bgMain};
+            border: 1px solid ${ES_CONF.COLORS.borderDark};
             border-radius: 8px; padding: 24px; z-index: 9999999;
             box-shadow: 0 4px 24px rgba(0,0,0,0.1);
-            width: ${TY_CONF.UI.modalWidth};
+            width: ${ES_CONF.UI.modalWidth};
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            box-sizing: border-box; animation: ty-fade-in 0.2s ease-out;
+            box-sizing: border-box; animation: es-fade-in 0.2s ease-out;
           }
-          .ty-table {
+          .es-table {
             width: 100%; text-align: left; border-collapse: collapse;
-            font-size: 13px; color: ${TY_CONF.COLORS.textMain};
+            font-size: 13px; color: ${ES_CONF.COLORS.textMain};
             table-layout: fixed;
           }
-          .ty-th {
-            padding: 8px 4px; border-bottom: 1px solid ${TY_CONF.COLORS.borderLight};
+          .es-th {
+            padding: 8px 4px; border-bottom: 1px solid ${ES_CONF.COLORS.borderLight};
             font-weight: 500; position: sticky; top: 0;
-            background: ${TY_CONF.COLORS.bgMain};
+            background: ${ES_CONF.COLORS.bgMain};
           }
-          .ty-td {
+          .es-td {
             padding: 10px 4px; border-bottom: 1px solid #f1f3f4;
           }
-          .ty-editable {
+          .es-editable {
             cursor: pointer; transition: background 0.2s; position: relative;
           }
-          .ty-editable:hover {
-            background: ${TY_CONF.COLORS.bgHover}; border-radius: 4px;
+          .es-editable:hover {
+            background: ${ES_CONF.COLORS.bgHover}; border-radius: 4px;
           }
-          .ty-view {
+          .es-view {
             min-height: 18px; line-height: 18px; padding: 4px;
             display: block; overflow: hidden; text-overflow: ellipsis;
           }
-          .ty-edit {
-            width: 100%; border: 1px solid ${TY_CONF.COLORS.theme};
+          .es-edit {
+            width: 100%; border: 1px solid ${ES_CONF.COLORS.theme};
             padding: 5px; border-radius: 4px; font-family: inherit;
             font-size: 13px; box-sizing: border-box; outline: none;
           }
-          .ty-mac-text {
+          .es-mac-text {
             font-size: 12px; font-family: monospace; font-weight: 600;
-            color: ${TY_CONF.COLORS.theme};
+            color: ${ES_CONF.COLORS.theme};
           }
-          .ty-ip-text {
-            font-size: 11px; color: ${TY_CONF.COLORS.textSub};
+          .es-ip-text {
+            font-size: 11px; color: ${ES_CONF.COLORS.textSub};
           }
-          @keyframes ty-spin {
+          @keyframes es-spin {
             100% { transform: rotate(360deg); }
           }
-          @keyframes ty-fade-in {
+          @keyframes es-fade-in {
             from { opacity: 0; transform: translate(-50%, -45%); }
             to { opacity: 1; transform: translate(-50%, -50%); }
           }
@@ -243,19 +248,19 @@
     }
 
     // ==========================================
-    // 3. 全局弹窗与交互引擎 (TY_UI)
+    // 3. 全局弹窗与交互引擎 (ES_UI)
     // ==========================================
-    class TY_UI {
+    class ES_UI {
       static toast(message, type = 'info', duration = 2500) {
-        let existing = document.getElementById('ty-toast');
+        let existing = document.getElementById('es-toast');
         if (existing) existing.remove();
 
         const toast = document.createElement('div');
-        toast.id = 'ty-toast';
-        toast.className = 'ty-modal';
+        toast.id = 'es-toast';
+        toast.className = 'es-modal';
         toast.style.cssText = `
           width: 300px; padding: 20px; text-align: center;
-          z-index: 99999999; animation: ty-fade-in 0.2s ease-out;
+          z-index: 99999999; animation: es-fade-in 0.2s ease-out;
         `;
 
         let icon = '💡';
@@ -265,7 +270,7 @@
 
         toast.innerHTML = `
           <div style="font-size: 28px; margin-bottom: 12px;">${icon}</div>
-          <div style="color: ${TY_CONF.COLORS.textMain}; font-size: 14px;
+          <div style="color: ${ES_CONF.COLORS.textMain}; font-size: 14px;
             line-height: 1.5; font-weight: 500;">
             ${message.replace(/\n/g, '<br>')}
           </div>
@@ -282,40 +287,40 @@
       }
 
       static confirm(message, onConfirm) {
-        let existing = document.getElementById('ty-confirm');
+        let existing = document.getElementById('es-confirm');
         if (existing) existing.remove();
 
         const modal = document.createElement('div');
-        modal.id = 'ty-confirm';
-        modal.className = 'ty-modal';
+        modal.id = 'es-confirm';
+        modal.className = 'es-modal';
         modal.style.cssText = `
           width: 320px; padding: 24px; z-index: 99999999;
-          animation: ty-fade-in 0.2s ease-out;
+          animation: es-fade-in 0.2s ease-out;
         `;
 
         modal.innerHTML = `
-          <div style="color: ${TY_CONF.COLORS.textMain}; font-size: 15px;
+          <div style="color: ${ES_CONF.COLORS.textMain}; font-size: 15px;
             margin-bottom: 24px; line-height: 1.5; text-align: center;
             font-weight: 500;">
             ${message.replace(/\n/g, '<br>')}
           </div>
           <div style="display: flex; justify-content: center; gap: 12px;">
-            <button id="ty-confirm-cancel" class="ty-btn"
+            <button id="es-confirm-cancel" class="es-btn"
               style="width: 100px; background: none; justify-content: center;
-              border: 1px solid ${TY_CONF.COLORS.borderDark};">
-              ${TY_CONF.TEXT.btnCancel}
+              border: 1px solid ${ES_CONF.COLORS.borderDark};">
+              ${ES_CONF.TEXT.btnCancel}
             </button>
-            <button id="ty-confirm-ok" class="ty-btn"
-              style="width: 100px; background: ${TY_CONF.COLORS.theme};
+            <button id="es-confirm-ok" class="es-btn"
+              style="width: 100px; background: ${ES_CONF.COLORS.theme};
               justify-content: center; color: white; border: none;">
-              ${TY_CONF.TEXT.btnConfirm}
+              ${ES_CONF.TEXT.btnConfirm}
             </button>
           </div>
         `;
         document.body.appendChild(modal);
 
-        document.getElementById('ty-confirm-cancel').onclick = () => modal.remove();
-        document.getElementById('ty-confirm-ok').onclick = () => {
+        document.getElementById('es-confirm-cancel').onclick = () => modal.remove();
+        document.getElementById('es-confirm-ok').onclick = () => {
           modal.remove();
           onConfirm();
         };
@@ -332,14 +337,14 @@
 
       static getProfile(mac, currentOrigHost = "") {
         let normMac = this.normalizeMac(mac);
-        let data = localStorage.getItem(TY_CONF.SYS.dbPrefix + normMac) ||
-          localStorage.getItem(TY_CONF.SYS.dbPrefix + mac.toLowerCase()) ||
-          localStorage.getItem(TY_CONF.SYS.dbPrefix + mac.toUpperCase()) ||
-          localStorage.getItem(TY_CONF.SYS.dbPrefix + mac);
+        let data = localStorage.getItem(ES_CONF.SYS.dbPrefix + normMac) ||
+          localStorage.getItem(ES_CONF.SYS.dbPrefix + mac.toLowerCase()) ||
+          localStorage.getItem(ES_CONF.SYS.dbPrefix + mac.toUpperCase()) ||
+          localStorage.getItem(ES_CONF.SYS.dbPrefix + mac);
 
         if (data) {
           let parsed = JSON.parse(data);
-          let isUnknown = currentOrigHost === TY_CONF.DICT.unknown;
+          let isUnknown = currentOrigHost === ES_CONF.DICT.unknown;
           if (currentOrigHost && !isUnknown && !parsed.origHost) {
             parsed.origHost = currentOrigHost;
             this.saveProfile(normMac, parsed);
@@ -347,14 +352,14 @@
           return parsed;
         }
 
-        let isAnon = TY_CONF.DICT.anonymousNames.includes(
+        let isAnon = ES_CONF.DICT.anonymousNames.includes(
           (currentOrigHost || "").toLowerCase()
         );
 
-        if (currentOrigHost && currentOrigHost !== TY_CONF.DICT.unknown && !isAnon) {
+        if (currentOrigHost && currentOrigHost !== ES_CONF.DICT.unknown && !isAnon) {
           for (let i = 0; i < localStorage.length; i++) {
             let key = localStorage.key(i);
-            if (key.startsWith(TY_CONF.SYS.dbPrefix)) {
+            if (key.startsWith(ES_CONF.SYS.dbPrefix)) {
               try {
                 let saved = JSON.parse(localStorage.getItem(key));
                 if (saved.origHost && saved.origHost === currentOrigHost) {
@@ -371,7 +376,7 @@
       }
 
       static saveProfile(mac, profile) {
-        let key = TY_CONF.SYS.dbPrefix + this.normalizeMac(mac);
+        let key = ES_CONF.SYS.dbPrefix + this.normalizeMac(mac);
         localStorage.setItem(key, JSON.stringify(profile));
       }
 
@@ -379,7 +384,7 @@
         let names = new Set();
         for (let i = 0; i < localStorage.length; i++) {
           let key = localStorage.key(i);
-          if (key.startsWith(TY_CONF.SYS.dbPrefix)) {
+          if (key.startsWith(ES_CONF.SYS.dbPrefix)) {
             try {
               let saved = JSON.parse(localStorage.getItem(key));
               if (saved.name) names.add(saved.name);
@@ -392,7 +397,7 @@
       static findProfileByName(name) {
         for (let i = 0; i < localStorage.length; i++) {
           let key = localStorage.key(i);
-          if (key.startsWith(TY_CONF.SYS.dbPrefix)) {
+          if (key.startsWith(ES_CONF.SYS.dbPrefix)) {
             try {
               let saved = JSON.parse(localStorage.getItem(key));
               if (saved.name === name) return saved;
@@ -406,12 +411,12 @@
         let data = {};
         for (let i = 0; i < localStorage.length; i++) {
           let key = localStorage.key(i);
-          if (key.startsWith(TY_CONF.SYS.dbPrefix)) {
+          if (key.startsWith(ES_CONF.SYS.dbPrefix)) {
             data[key] = JSON.parse(localStorage.getItem(key));
           }
         }
         if (Object.keys(data).length === 0) {
-          TY_UI.toast(TY_CONF.TEXT.msgExportEmpty, 'warning');
+          ES_UI.toast(ES_CONF.TEXT.msgExportEmpty, 'warning');
           return;
         }
         let blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -420,7 +425,7 @@
         let a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         let dateStr = new Date().toISOString().split('T')[0];
-        a.download = `${TY_CONF.TEXT.exportFileName}${dateStr}.json`;
+        a.download = `${ES_CONF.TEXT.exportFileName}${dateStr}.json`;
         a.click();
       }
 
@@ -433,17 +438,17 @@
             let data = JSON.parse(e.target.result);
             let count = 0;
             for (let key in data) {
-              if (key.startsWith(TY_CONF.SYS.dbPrefix)) {
+              if (key.startsWith(ES_CONF.SYS.dbPrefix)) {
                 localStorage.setItem(key, JSON.stringify(data[key]));
                 count++;
               }
             }
-            TY_UI.toast(
-              TY_CONF.TEXT.msgImportSuccess.replace('{count}', count), 'success'
+            ES_UI.toast(
+              ES_CONF.TEXT.msgImportSuccess.replace('{count}', count), 'success'
             );
             if (callback) callback();
           } catch (err) {
-            TY_UI.toast(TY_CONF.TEXT.msgImportFail, 'error');
+            ES_UI.toast(ES_CONF.TEXT.msgImportFail, 'error');
           }
         };
         reader.readAsText(file);
@@ -500,33 +505,33 @@
         let overlay = document.createElement('div');
         overlay.style.cssText = `
           position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-          background: ${TY_CONF.COLORS.overlayBg}; z-index: 99999999;
+          background: ${ES_CONF.COLORS.overlayBg}; z-index: 99999999;
           display: flex; flex-direction: column; justify-content: center;
           align-items: center; font-family: -apple-system, sans-serif;
           text-align: center;
         `;
         overlay.innerHTML = `
           <div style="font-size: 56px; margin-bottom: 16px;
-            animation: ty-spin 2s linear infinite;">
-            ${TY_CONF.TEXT.freezeIcon}
+            animation: es-spin 2s linear infinite;">
+            ${ES_CONF.TEXT.freezeIcon}
           </div>
-          <h2 style="color: ${TY_CONF.COLORS.textMain}; margin: 0 0 12px 0;
+          <h2 style="color: ${ES_CONF.COLORS.textMain}; margin: 0 0 12px 0;
             font-size: 24px;">
-            ${TY_CONF.TEXT.freezeTitle}
+            ${ES_CONF.TEXT.freezeTitle}
           </h2>
-          <p style="color: ${TY_CONF.COLORS.textSub}; margin: 4px 0; font-size: 14px;">
-            ${TY_CONF.TEXT.freezeSub1}
+          <p style="color: ${ES_CONF.COLORS.textSub}; margin: 4px 0; font-size: 14px;">
+            ${ES_CONF.TEXT.freezeSub1}
           </p>
-          <p style="color: ${TY_CONF.COLORS.textSub}; margin: 4px 0; font-size: 14px;">
-            ${TY_CONF.TEXT.freezeSub2}
+          <p style="color: ${ES_CONF.COLORS.textSub}; margin: 4px 0; font-size: 14px;">
+            ${ES_CONF.TEXT.freezeSub2}
           </p>
-          <p style="color: ${TY_CONF.COLORS.theme}; font-weight: bold;
+          <p style="color: ${ES_CONF.COLORS.theme}; font-weight: bold;
             margin: 24px 0; font-size: 16px;">
-            ${TY_CONF.TEXT.freezeSub3}
+            ${ES_CONF.TEXT.freezeSub3}
           </p>
-          <button class="ty-btn" onclick="location.reload()"
-            style="width: auto; background: ${TY_CONF.COLORS.theme}; color: white;">
-            ${TY_CONF.TEXT.freezeBtn}
+          <button class="es-btn" onclick="location.reload()"
+            style="width: auto; background: ${ES_CONF.COLORS.theme}; color: white;">
+            ${ES_CONF.TEXT.freezeBtn}
           </button>
         `;
         document.body.appendChild(overlay);
@@ -539,7 +544,7 @@
       static renameWifi() {
         let apiWin = this.getApiWindow();
         if (!apiWin) {
-          TY_UI.toast(TY_CONF.TEXT.msgRequireMenu, 'warning');
+          ES_UI.toast(ES_CONF.TEXT.msgRequireMenu, 'warning');
           return;
         }
         let dm = (apiWin.$ && apiWin.$.DataMap) ? apiWin.$.DataMap : {};
@@ -559,12 +564,12 @@
         };
 
         let currentSsid = findVal(dm, ['ssid', 'SSID']);
-        let currentPwd = findVal(
-          dm, ['key_wpa', 'wpa_psk', 'WPAKey', 'key_passphrase']
-        );
-        let currentPower = findVal(
-          dm, ['wl_power', 'tx_power', 'PowerLevel']
-        ) || TY_CONF.API.defaultPower;
+        let currentPwd = findVal(dm, ['key_wpa', 'wpa_psk', 'WPAKey', 'key_passphrase']);
+        let currentPower = findVal(dm, ['wl_power', 'tx_power', 'PowerLevel']) || ES_CONF.API.defaultPower;
+
+        if (!currentSsid || !currentPwd) {
+          ES_UI.toast(ES_CONF.TEXT.msgRenameWait, "info", 4000);
+        }
 
         if (document.getElementById('wifi-config-modal')) {
           document.getElementById('wifi-config-modal').remove();
@@ -572,43 +577,43 @@
 
         const modal = document.createElement('div');
         modal.id = 'wifi-config-modal';
-        modal.className = 'ty-modal';
+        modal.className = 'es-modal';
         modal.style.width = '380px';
 
         modal.innerHTML = `
-          <div style="border-bottom: 1px solid ${TY_CONF.COLORS.borderLight};
+          <div style="border-bottom: 1px solid ${ES_CONF.COLORS.borderLight};
             padding-bottom: 12px; margin-bottom: 16px;">
-            <h3 style="margin: 0; color: ${TY_CONF.COLORS.textMain};
+            <h3 style="margin: 0; color: ${ES_CONF.COLORS.textMain};
               font-size: 16px; font-weight: 500;">
-              ${TY_CONF.TEXT.menuRename.icon} ${TY_CONF.TEXT.menuRename.text}
+              ${ES_CONF.TEXT.menuRename.icon} ${ES_CONF.TEXT.menuRename.text}
             </h3>
           </div>
 
           <div style="margin-bottom: 12px;">
             <label style="display: block; font-size: 12px; margin-bottom: 6px;
-              color: ${TY_CONF.COLORS.textSub};">
-              ${TY_CONF.TEXT.lblSsid}
+              color: ${ES_CONF.COLORS.textSub};">
+              ${ES_CONF.TEXT.lblSsid}
             </label>
-            <input type="text" id="ty-wifi-ssid" class="ty-edit"
+            <input type="text" id="es-wifi-ssid" class="es-edit"
               style="padding: 6px;" value="${currentSsid}">
           </div>
 
           <div style="margin-bottom: 12px;">
             <label style="display: block; font-size: 12px; margin-bottom: 6px;
-              color: ${TY_CONF.COLORS.textSub};">
-              ${TY_CONF.TEXT.lblPwd}
+              color: ${ES_CONF.COLORS.textSub};">
+              ${ES_CONF.TEXT.lblPwd}
             </label>
-            <input type="text" id="ty-wifi-pwd" class="ty-edit"
+            <input type="text" id="es-wifi-pwd" class="es-edit"
               style="padding: 6px;" value="${currentPwd}">
           </div>
 
           <div style="margin-bottom: 24px;">
             <label style="display: block; font-size: 12px; margin-bottom: 6px;
-              color: ${TY_CONF.COLORS.textSub};">
-              ${TY_CONF.TEXT.lblPower}
+              color: ${ES_CONF.COLORS.textSub};">
+              ${ES_CONF.TEXT.lblPower}
             </label>
-            <select id="ty-wifi-power" class="ty-edit"
-              style="height: 32px; padding: 4px; background: ${TY_CONF.COLORS.bgMain};">
+            <select id="es-wifi-power" class="es-edit"
+              style="height: 32px; padding: 4px; background: ${ES_CONF.COLORS.bgMain};">
               <option value="15">20% (极低发热)</option>
               <option value="25">40% (低功耗)</option>
               <option value="50">60% (均衡模式)</option>
@@ -618,47 +623,47 @@
           </div>
 
           <div style="display: flex; justify-content: flex-end; gap: 8px;">
-            <button id="ty-wifi-cancel" class="ty-btn"
+            <button id="es-wifi-cancel" class="es-btn"
               style="width: auto; background: none;
-              border: 1px solid ${TY_CONF.COLORS.borderDark};">
-              ${TY_CONF.TEXT.btnCancel}
+              border: 1px solid ${ES_CONF.COLORS.borderDark};">
+              ${ES_CONF.TEXT.btnCancel}
             </button>
-            <button id="ty-wifi-save" class="ty-btn"
-              style="width: auto; background: ${TY_CONF.COLORS.theme};
+            <button id="es-wifi-save" class="es-btn"
+              style="width: auto; background: ${ES_CONF.COLORS.theme};
               color: white; border: none;">
-              ${TY_CONF.TEXT.btnSaveReboot}
+              ${ES_CONF.TEXT.btnSaveReboot}
             </button>
           </div>
         `;
         document.body.appendChild(modal);
 
-        let powerSelect = document.getElementById('ty-wifi-power');
+        let powerSelect = document.getElementById('es-wifi-power');
         if (Array.from(powerSelect.options).some(opt => opt.value === currentPower)) {
           powerSelect.value = currentPower;
         }
 
-        document.getElementById('ty-wifi-cancel').onclick = () => modal.remove();
+        document.getElementById('es-wifi-cancel').onclick = () => modal.remove();
 
-        document.getElementById('ty-wifi-save').onclick = () => {
-          let newSsid = document.getElementById('ty-wifi-ssid').value.trim();
-          let newPwd = document.getElementById('ty-wifi-pwd').value;
-          let newPower = document.getElementById('ty-wifi-power').value;
+        document.getElementById('es-wifi-save').onclick = () => {
+          let newSsid = document.getElementById('es-wifi-ssid').value.trim();
+          let newPwd = document.getElementById('es-wifi-pwd').value;
+          let newPower = document.getElementById('es-wifi-power').value;
 
           if (!newSsid) {
-            TY_UI.toast(TY_CONF.TEXT.msgSsidEmpty, 'error');
+            ES_UI.toast(ES_CONF.TEXT.msgSsidEmpty, 'error');
             return;
           }
           if (!newPwd || newPwd.length < 8) {
-            TY_UI.toast(TY_CONF.TEXT.msgPwdShort, 'error');
+            ES_UI.toast(ES_CONF.TEXT.msgPwdShort, 'error');
             return;
           }
 
           let payload = Object.assign({}, dm);
-          payload.wl_disabled = TY_CONF.API.wlanDisabled;
+          payload.wl_disabled = ES_CONF.API.wlanDisabled;
           payload.ssid = newSsid;
           payload.SSID = newSsid;
-          payload.sec_mode = TY_CONF.API.secMode;
-          payload.encryption = TY_CONF.API.encryption;
+          payload.sec_mode = ES_CONF.API.secMode;
+          payload.encryption = ES_CONF.API.encryption;
           payload.wl_power = newPower;
           payload.key_wpa = newPwd;
           payload.wpa_psk = newPwd;
@@ -673,24 +678,49 @@
       static setChannelWidth(mode) {
         let apiWin = this.getApiWindow();
         if (!apiWin) {
-          TY_UI.toast(TY_CONF.TEXT.msgRequireMenu, 'warning');
+          ES_UI.toast(ES_CONF.TEXT.msgRequireMenu, 'warning');
           return;
         }
-        let payload = Object.assign(
-          {}, (apiWin.$ && apiWin.$.DataMap) ? apiWin.$.DataMap : {}
-        );
-        payload.wl_disabled = TY_CONF.API.wlanDisabled;
+        let dm = (apiWin.$ && apiWin.$.DataMap) ? apiWin.$.DataMap : {};
 
-        if (mode === "40") {
-          payload.channel_width = TY_CONF.API.width40;
-          payload.channel_bind = TY_CONF.API.bindLower;
-          payload.channel = TY_CONF.API.channel40;
-        } else {
-          payload.channel_width = TY_CONF.API.width20;
-          payload.channel = TY_CONF.API.channel20;
+        const findVal = (obj, keys) => {
+          if (!obj || typeof obj !== 'object') return "";
+          for (let k of keys) {
+            if (obj[k] && typeof obj[k] === 'string') return obj[k];
+          }
+          for (let key in obj) {
+            if (typeof obj[key] === 'object') {
+              let res = findVal(obj[key], keys);
+              if (res) return res;
+            }
+          }
+          return "";
+        };
+
+        let currentSsid = findVal(dm, ['ssid', 'SSID']);
+        let currentPwd = findVal(dm, ['key_wpa', 'wpa_psk', 'WPAKey', 'key_passphrase']);
+
+        if (!currentSsid || !currentPwd) {
+          ES_UI.toast(ES_CONF.TEXT.msgBandWait, "error", 4500);
+          return;
         }
 
-        TY_UI.confirm(TY_CONF.TEXT.msgBandConfirm.replace('{mode}', mode), () => {
+        let payload = Object.assign({}, dm);
+        payload.wl_disabled = ES_CONF.API.wlanDisabled;
+
+        if (mode === "40") {
+          payload.channel_width = ES_CONF.API.width40;
+          payload.channel_bind = ES_CONF.API.bindLower;
+          payload.channel = ES_CONF.API.channel40;
+        } else {
+          payload.channel_width = ES_CONF.API.width20;
+          payload.channel = ES_CONF.API.channel20;
+          if (payload.channel_bind !== undefined) {
+            payload.channel_bind = "";
+          }
+        }
+
+        ES_UI.confirm(ES_CONF.TEXT.msgBandConfirm.replace('{mode}', mode), () => {
           this.executeWithFreeze(apiWin, payload);
         });
       }
@@ -703,9 +733,9 @@
       static formatSpeed(val) {
         let kb = parseFloat(val);
         if (isNaN(kb)) return val;
-        if (kb === 0) return '0' + TY_CONF.DICT.unitKB;
-        if (kb < 1024) return kb.toFixed(0) + TY_CONF.DICT.unitKB;
-        return (kb / 1024).toFixed(2) + TY_CONF.DICT.unitMB;
+        if (kb === 0) return '0' + ES_CONF.DICT.unitKB;
+        if (kb < 1024) return kb.toFixed(0) + ES_CONF.DICT.unitKB;
+        return (kb / 1024).toFixed(2) + ES_CONF.DICT.unitMB;
       }
 
       static startHook() {
@@ -715,22 +745,22 @@
               if (
                 w.Chart &&
                 typeof w.Chart === 'function' &&
-                !w.Chart._ty_patched
+                !w.Chart._es_patched
               ) {
                 const OriginalChart = w.Chart;
                 w.Chart = function (context) {
                   let cvsId = (context && context.canvas)
-                    ? (context.canvas.id || TY_CONF.SYS.chartId)
-                    : TY_CONF.SYS.chartId;
+                    ? (context.canvas.id || ES_CONF.SYS.chartId)
+                    : ES_CONF.SYS.chartId;
 
                   if (context && context.canvas) {
                     let cvs = context.canvas;
                     let targetWidth = cvs.parentNode
                       ? cvs.parentNode.clientWidth : 600;
                     cvs.style.width = targetWidth + 'px';
-                    cvs.style.height = TY_CONF.UI.chartHeight;
+                    cvs.style.height = ES_CONF.UI.chartHeight;
                     cvs.width = targetWidth;
-                    cvs.height = parseInt(TY_CONF.UI.chartHeight);
+                    cvs.height = parseInt(ES_CONF.UI.chartHeight);
                   }
 
                   const instance = new OriginalChart(context);
@@ -743,27 +773,27 @@
                         options.animation = false;
 
                         options.scaleLabel =
-                          "<%= window._ty_formatSpeed(value) %>";
+                          "<%= window._es_formatSpeed(value) %>";
                         options.tooltipTemplate =
                           "<%if (label){%><%=label%>: <%}%>" +
-                          "<%= window._ty_formatSpeed(value) %>";
+                          "<%= window._es_formatSpeed(value) %>";
                         options.multiTooltipTemplate =
-                          "<%=datasetLabel%>: <%= window._ty_formatSpeed(value) %>";
+                          "<%=datasetLabel%>: <%= window._es_formatSpeed(value) %>";
 
                         const isInvalidTime = (lbl) =>
                           !lbl ||
-                          lbl.includes(TY_CONF.DICT.invalidTimeMatch) ||
-                          TY_CONF.DICT.invalidTimeRegex.test(lbl.trim());
+                          lbl.includes(ES_CONF.DICT.invalidTimeMatch) ||
+                          ES_CONF.DICT.invalidTimeRegex.test(lbl.trim());
 
                         if (data && data.labels && data.datasets) {
-                          if (!w._ty_chart_history) w._ty_chart_history = {};
-                          if (!w._ty_chart_history[cvsId]) {
-                            w._ty_chart_history[cvsId] = {
+                          if (!w._es_chart_history) w._es_chart_history = {};
+                          if (!w._es_chart_history[cvsId]) {
+                            w._es_chart_history[cvsId] = {
                               labels: [], datasets: []
                             };
                           }
 
-                          let hist = w._ty_chart_history[cvsId];
+                          let hist = w._es_chart_history[cvsId];
                           if (
                             hist.datasets.length > 0 &&
                             hist.datasets.length !== data.datasets.length
@@ -803,16 +833,16 @@
                             }
                           }
 
-                          if (hist.labels.length > TY_CONF.SYS.maxChartPoints) {
+                          if (hist.labels.length > ES_CONF.SYS.maxChartPoints) {
                             hist.labels.shift();
                             hist.datasets.forEach(ds => ds.shift());
                           }
 
                           options.pointDot =
-                            (hist.labels.length <= TY_CONF.SYS.hideDotThreshold);
+                            (hist.labels.length <= ES_CONF.SYS.hideDotThreshold);
 
                           if (hist.labels.length === 0) {
-                            data.labels = [TY_CONF.TEXT.chartLoading];
+                            data.labels = [ES_CONF.TEXT.chartLoading];
                             for (let i = 0; i < data.datasets.length; i++) {
                               data.datasets[i].data = [0];
                             }
@@ -835,11 +865,11 @@
                   return instance;
                 };
                 Object.assign(w.Chart, OriginalChart);
-                w.Chart._ty_patched = true;
+                w.Chart._es_patched = true;
               }
             } catch (e) { }
           }
-        }, TY_CONF.SYS.hookInterval);
+        }, ES_CONF.SYS.hookInterval);
       }
     }
 
@@ -907,7 +937,7 @@
                   el && el.tagName !== 'BODY' &&
                   el.tagName !== 'TABLE' && levels < 7
                 ) {
-                  el.setAttribute('data-ty-mac', targetMac);
+                  el.setAttribute('data-es-mac', targetMac);
                   if (['TR', 'LI', 'FIELDSET'].includes(el.tagName)) break;
                   el = el.parentElement;
                   levels++;
@@ -922,7 +952,7 @@
               if (!hasCustom) return null;
 
               let namePart = profile.name || globalMacToOrig[mac] ||
-                TY_CONF.DICT.unknownDevice;
+                ES_CONF.DICT.unknownDevice;
               let extras = [profile.brand, profile.type, profile.os].filter(Boolean);
 
               if (extras.length === 0) return namePart;
@@ -931,7 +961,7 @@
 
             let getRegex = (mac) => {
               let orig = globalMacToOrig[mac];
-              let parts = [...TY_CONF.DICT.anonymousNames];
+              let parts = [...ES_CONF.DICT.anonymousNames];
               if (orig && orig.length > 1 && !parts.includes(orig.toLowerCase())) {
                 parts.push(orig.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
               }
@@ -941,7 +971,7 @@
             let processNode = (textVal, setValFn, elContext) => {
               if (!textVal || !textVal.trim()) return;
 
-              let isSuspicious = TY_CONF.DICT.anonymousNames.some(a =>
+              let isSuspicious = ES_CONF.DICT.anonymousNames.some(a =>
                 new RegExp(a, 'i').test(textVal)
               );
               if (!isSuspicious) {
@@ -957,7 +987,7 @@
                 let el = elContext;
                 let foundMac = null;
                 while (el && el.tagName !== 'BODY') {
-                  foundMac = el.getAttribute('data-ty-mac');
+                  foundMac = el.getAttribute('data-es-mac');
                   if (foundMac) break;
                   el = el.parentElement;
                 }
@@ -1015,16 +1045,16 @@
                   );
                 }
                 node.nodeValue = node.nodeValue.replace(
-                  TY_CONF.DICT.upBandRaw, TY_CONF.DICT.upBandClean
+                  ES_CONF.DICT.upBandRaw, ES_CONF.DICT.upBandClean
                 );
                 node.nodeValue = node.nodeValue.replace(
-                  TY_CONF.DICT.downBandRaw, TY_CONF.DICT.downBandClean
+                  ES_CONF.DICT.downBandRaw, ES_CONF.DICT.downBandClean
                 );
               }
             } catch (e) { }
           }
           this.syncNow();
-        }, TY_CONF.SYS.monitorInterval);
+        }, ES_CONF.SYS.monitorInterval);
       }
     }
 
@@ -1070,8 +1100,8 @@
                     macSet.add(cleanMac);
                     rawDevices.push({
                       mac: cleanMac,
-                      ip: TY_CONF.DICT.unknown,
-                      originalHost: TY_CONF.DICT.fromText,
+                      ip: ES_CONF.DICT.unknown,
+                      originalHost: ES_CONF.DICT.fromText,
                     });
                   }
                 });
@@ -1081,44 +1111,44 @@
         }
 
         if (rawDevices.length === 0) {
-          TY_UI.toast(TY_CONF.TEXT.msgScanEmpty, 'warning');
+          ES_UI.toast(ES_CONF.TEXT.msgScanEmpty, 'warning');
           return;
         }
         this.render(rawDevices);
       }
 
       static generateRowHtml(dev) {
-        let isAnon = TY_CONF.DICT.anonymousNames.includes(
+        let isAnon = ES_CONF.DICT.anonymousNames.includes(
           (dev.originalHost || "").toLowerCase()
         );
         let orig = (dev.originalHost && !isAnon)
-          ? dev.originalHost : TY_CONF.DICT.unknown;
+          ? dev.originalHost : ES_CONF.DICT.unknown;
         let profile = DeviceStorage.getProfile(dev.mac, orig);
         let displayName = profile.name || orig;
 
         const buildCell = (field, val, ph, isName) => `
-          <td class="ty-td ty-editable" data-field="${field}" data-orig="${orig}">
-            <div class="ty-view view-${field}">${val || (field === 'name' ? orig : '-')}</div>
-            <input type="text" class="ty-edit in-${field}"
-              ${isName ? 'list="ty-history-names"' : ''}
+          <td class="es-td es-editable" data-field="${field}" data-orig="${orig}">
+            <div class="es-view view-${field}">${val || (field === 'name' ? orig : '-')}</div>
+            <input type="text" class="es-edit in-${field}"
+              ${isName ? 'list="es-history-names"' : ''}
               style="display:none;" value="${val}" placeholder="${ph}">
           </td>
         `;
 
         return `
           <tr data-mac="${dev.mac}">
-            <td class="ty-td">
-              <div class="ty-mac-text">${dev.mac.toUpperCase()}</div>
-              <div class="ty-ip-text">${dev.ip}</div>
+            <td class="es-td">
+              <div class="es-mac-text">${dev.mac.toUpperCase()}</div>
+              <div class="es-ip-text">${dev.ip}</div>
             </td>
             ${buildCell('name', profile.name, orig, true)}
-            ${buildCell('type', profile.type, TY_CONF.TEXT.phType, false)}
-            ${buildCell('brand', profile.brand, TY_CONF.TEXT.phBrand, false)}
-            ${buildCell('os', profile.os, TY_CONF.TEXT.phOs, false)}
-            <td class="ty-td" style="text-align: right; white-space: nowrap;">
-              <button class="ty-btn copy-mac-btn" data-mac="${dev.mac}"
+            ${buildCell('type', profile.type, ES_CONF.TEXT.phType, false)}
+            ${buildCell('brand', profile.brand, ES_CONF.TEXT.phBrand, false)}
+            ${buildCell('os', profile.os, ES_CONF.TEXT.phOs, false)}
+            <td class="es-td" style="text-align: right; white-space: nowrap;">
+              <button class="es-btn copy-mac-btn" data-mac="${dev.mac}"
                 style="width:auto; padding: 4px 8px; justify-content: center;">
-                ${TY_CONF.TEXT.btnCopy}
+                ${ES_CONF.TEXT.btnCopy}
               </button>
             </td>
           </tr>
@@ -1132,62 +1162,62 @@
 
         const modal = document.createElement('div');
         modal.id = 'wifi-radar-modal';
-        modal.className = 'ty-modal';
+        modal.className = 'es-modal';
 
         let historyNames = DeviceStorage.getAllHistoricalNames();
-        let datalistHtml = `<datalist id="ty-history-names">
+        let datalistHtml = `<datalist id="es-history-names">
           ${historyNames.map(n => `<option value="${n}">`).join('')}
         </datalist>`;
 
         modal.innerHTML = `
           ${datalistHtml}
           <div style="display: flex; justify-content: space-between;
-            align-items: center; border-bottom: 1px solid ${TY_CONF.COLORS.borderLight};
+            align-items: center; border-bottom: 1px solid ${ES_CONF.COLORS.borderLight};
             padding-bottom: 12px; margin-bottom: 16px;">
-            <h3 style="margin: 0; color: ${TY_CONF.COLORS.textMain};
+            <h3 style="margin: 0; color: ${ES_CONF.COLORS.textMain};
               font-size: 16px; font-weight: 500;">
-              ${TY_CONF.TEXT.radarTitle} (${rawDevices.length} 台在线)
+              ${ES_CONF.TEXT.radarTitle} (${rawDevices.length} 台在线)
             </h3>
             <div>
-              <span style="font-size: 12px; color: ${TY_CONF.COLORS.textSub};
+              <span style="font-size: 12px; color: ${ES_CONF.COLORS.textSub};
                 margin-right: 15px;">
-                ${TY_CONF.TEXT.radarTip}
+                ${ES_CONF.TEXT.radarTip}
               </span>
-              <button id="radar-import-btn" class="ty-link-btn">
-                ${TY_CONF.TEXT.btnImport}
+              <button id="radar-import-btn" class="es-link-btn">
+                ${ES_CONF.TEXT.btnImport}
               </button>
-              <button id="radar-export-btn" class="ty-link-btn">
-                ${TY_CONF.TEXT.btnExport}
+              <button id="radar-export-btn" class="es-link-btn">
+                ${ES_CONF.TEXT.btnExport}
               </button>
               <button id="radar-close-btn"
                 style="background: none; border: none; font-size: 16px;
-                color: ${TY_CONF.COLORS.textSub}; cursor: pointer;">
-                ${TY_CONF.TEXT.btnClose}
+                color: ${ES_CONF.COLORS.textSub}; cursor: pointer;">
+                ${ES_CONF.TEXT.btnClose}
               </button>
             </div>
           </div>
           <div style="max-height: 400px; overflow-y: auto;">
-          <table class="ty-table">
+          <table class="es-table">
             <thead>
               <tr>
-                <th class="ty-th" style="width: ${TY_CONF.UI.cols.mac};">
-                  ${TY_CONF.TEXT.thMacIp}
+                <th class="es-th" style="width: ${ES_CONF.UI.cols.mac};">
+                  ${ES_CONF.TEXT.thMacIp}
                 </th>
-                <th class="ty-th" style="width: ${TY_CONF.UI.cols.name};">
-                  ${TY_CONF.TEXT.thName}
+                <th class="es-th" style="width: ${ES_CONF.UI.cols.name};">
+                  ${ES_CONF.TEXT.thName}
                 </th>
-                <th class="ty-th" style="width: ${TY_CONF.UI.cols.type};">
-                  ${TY_CONF.TEXT.thType}
+                <th class="es-th" style="width: ${ES_CONF.UI.cols.type};">
+                  ${ES_CONF.TEXT.thType}
                 </th>
-                <th class="ty-th" style="width: ${TY_CONF.UI.cols.brand};">
-                  ${TY_CONF.TEXT.thBrand}
+                <th class="es-th" style="width: ${ES_CONF.UI.cols.brand};">
+                  ${ES_CONF.TEXT.thBrand}
                 </th>
-                <th class="ty-th" style="width: ${TY_CONF.UI.cols.os};">
-                  ${TY_CONF.TEXT.thOs}
+                <th class="es-th" style="width: ${ES_CONF.UI.cols.os};">
+                  ${ES_CONF.TEXT.thOs}
                 </th>
-                <th class="ty-th" style="width: ${TY_CONF.UI.cols.action};
+                <th class="es-th" style="width: ${ES_CONF.UI.cols.action};
                   text-align: right;">
-                  ${TY_CONF.TEXT.thAction}
+                  ${ES_CONF.TEXT.thAction}
                 </th>
               </tr>
             </thead>
@@ -1216,9 +1246,9 @@
           input.click();
         };
 
-        modal.querySelectorAll('.ty-editable').forEach(td => {
-          let viewDiv = td.querySelector('.ty-view');
-          let editInput = td.querySelector('.ty-edit');
+        modal.querySelectorAll('.es-editable').forEach(td => {
+          let viewDiv = td.querySelector('.es-view');
+          let editInput = td.querySelector('.es-edit');
 
           td.ondblclick = () => {
             viewDiv.style.display = 'none';
@@ -1282,11 +1312,11 @@
             document.body.removeChild(area);
 
             let originalHtml = this.innerHTML;
-            this.innerHTML = TY_CONF.TEXT.msgCopied;
-            this.style.color = TY_CONF.COLORS.success;
+            this.innerHTML = ES_CONF.TEXT.msgCopied;
+            this.style.color = ES_CONF.COLORS.success;
             setTimeout(() => {
               this.innerHTML = originalHtml;
-              this.style.color = TY_CONF.COLORS.textMain;
+              this.style.color = ES_CONF.COLORS.textMain;
             }, 2000);
           };
         });
@@ -1296,16 +1326,20 @@
     // ==========================================
     // 9. 控制台总装调度
     // ==========================================
-    class TianyiController {
+    class eSurfingController {
       constructor() {
         this.panel = null;
         this.autoFoldTimer = null;
       }
 
       init() {
+        const isLoginPage = window.location.pathname.toLowerCase().includes('login') ||
+          (document.querySelector('input[type="password"]') && window.frames.length === 0);
+        if (isLoginPage) return;
+
         StyleManager.inject();
-        window._ty_formatSpeed = ChartManager.formatSpeed;
-        window._ty_formatKBps = ChartManager.formatSpeed;
+        window._es_formatSpeed = ChartManager.formatSpeed;
+        window._es_formatKBps = ChartManager.formatSpeed;
 
         ChartManager.startHook();
         DomHijacker.startMonitor();
@@ -1313,7 +1347,7 @@
 
         window.top.document.addEventListener('click', (e) => {
           let isCollapsed =
-            localStorage.getItem(TY_CONF.SYS.panelCollapsedKey) === "1";
+            localStorage.getItem(ES_CONF.SYS.panelCollapsedKey) === "1";
           if (!isCollapsed && this.panel && !this.panel.contains(e.target)) {
             this.toggleCollapse(true);
           }
@@ -1321,24 +1355,24 @@
 
         setInterval(() => {
           for (let w of WifiOperator.getWindows()) {
-            if (w !== window.top && !w._ty_click_bound) {
+            if (w !== window.top && !w._es_click_bound) {
               w.document.addEventListener('click', (e) => {
                 let isCol =
-                  localStorage.getItem(TY_CONF.SYS.panelCollapsedKey) === "1";
+                  localStorage.getItem(ES_CONF.SYS.panelCollapsedKey) === "1";
                 if (!isCol) this.toggleCollapse(true);
               }, true);
-              w._ty_click_bound = true;
+              w._es_click_bound = true;
             }
           }
-        }, TY_CONF.SYS.monitorInterval);
+        }, ES_CONF.SYS.monitorInterval);
       }
 
       startAutoFoldTimer() {
         this.clearAutoFoldTimer();
         this.autoFoldTimer = setTimeout(() => {
-          let isCol = localStorage.getItem(TY_CONF.SYS.panelCollapsedKey) === "1";
+          let isCol = localStorage.getItem(ES_CONF.SYS.panelCollapsedKey) === "1";
           if (!isCol) this.toggleCollapse(true);
-        }, TY_CONF.SYS.autoFoldTime);
+        }, ES_CONF.SYS.autoFoldTime);
       }
 
       clearAutoFoldTimer() {
@@ -1349,45 +1383,45 @@
       }
 
       toggleCollapse(forceCollapse = false) {
-        let isCol = localStorage.getItem(TY_CONF.SYS.panelCollapsedKey) === "1";
+        let isCol = localStorage.getItem(ES_CONF.SYS.panelCollapsedKey) === "1";
         localStorage.setItem(
-          TY_CONF.SYS.panelCollapsedKey, forceCollapse ? "1" : (isCol ? "0" : "1")
+          ES_CONF.SYS.panelCollapsedKey, forceCollapse ? "1" : (isCol ? "0" : "1")
         );
         this.renderPanel();
       }
 
       renderPanel() {
         if (this.panel) this.panel.remove();
-        let isCollapsed = localStorage.getItem(TY_CONF.SYS.panelCollapsedKey) === "1";
+        let isCollapsed = localStorage.getItem(ES_CONF.SYS.panelCollapsedKey) === "1";
 
         this.panel = document.createElement('div');
-        this.panel.className = 'ty-panel';
+        this.panel.className = 'es-panel';
 
         this.panel.onmouseenter = () => this.clearAutoFoldTimer();
         this.panel.onmouseleave = () => {
-          let isCol = localStorage.getItem(TY_CONF.SYS.panelCollapsedKey) === "1";
+          let isCol = localStorage.getItem(ES_CONF.SYS.panelCollapsedKey) === "1";
           if (!isCol) this.startAutoFoldTimer();
         };
 
         let header = document.createElement('div');
-        header.className = 'ty-panel-header';
+        header.className = 'es-panel-header';
         header.onclick = () => {
           this.toggleCollapse();
-          let isCol = localStorage.getItem(TY_CONF.SYS.panelCollapsedKey) === "1";
+          let isCol = localStorage.getItem(ES_CONF.SYS.panelCollapsedKey) === "1";
           if (!isCol) this.startAutoFoldTimer();
         };
 
         header.innerHTML = `
           <div style="width: 28px; text-align: left; font-size: 14px; flex-shrink: 0;">
-            ${TY_CONF.TEXT.titleIcon}
+            ${ES_CONF.TEXT.titleIcon}
           </div>
-          <div style="color: ${TY_CONF.COLORS.textMain}; font-size: 14px;
+          <div style="color: ${ES_CONF.COLORS.textMain}; font-size: 14px;
             font-weight: 600; text-align: left; flex-grow: 1;">
-            ${TY_CONF.TEXT.title}
+            ${ES_CONF.TEXT.title}
           </div>
-          <div style="color: ${TY_CONF.COLORS.textSub}; font-size: 16px;
+          <div style="color: ${ES_CONF.COLORS.textSub}; font-size: 16px;
             font-weight: bold; flex-shrink: 0; text-align: right;">
-            ${isCollapsed ? TY_CONF.TEXT.collapsePlus : TY_CONF.TEXT.collapseMinus}
+            ${isCollapsed ? ES_CONF.TEXT.collapsePlus : ES_CONF.TEXT.collapseMinus}
           </div>
         `;
         this.panel.appendChild(header);
@@ -1401,7 +1435,7 @@
 
           const createBtn = (menuObj, onClick) => {
             let btn = document.createElement('button');
-            btn.className = 'ty-btn';
+            btn.className = 'es-btn';
             btn.innerHTML = `
               <div style="display: flex; align-items: center; width: 100%;">
                 <div style="width: 28px; text-align: left; font-size: 14px;
@@ -1417,21 +1451,21 @@
             contentDiv.appendChild(btn);
           };
 
-          createBtn(TY_CONF.TEXT.menuRename, () => WifiOperator.renameWifi());
+          createBtn(ES_CONF.TEXT.menuRename, () => WifiOperator.renameWifi());
 
           let div1 = document.createElement('div');
           div1.style.cssText = `
-            height: 1px; background: ${TY_CONF.COLORS.borderLight}; margin: 2px 0;
+            height: 1px; background: ${ES_CONF.COLORS.borderLight}; margin: 2px 0;
           `;
           contentDiv.appendChild(div1);
 
-          createBtn(TY_CONF.TEXT.menu40M, () => WifiOperator.setChannelWidth('40'));
-          createBtn(TY_CONF.TEXT.menu20M, () => WifiOperator.setChannelWidth('20'));
+          createBtn(ES_CONF.TEXT.menu40M, () => WifiOperator.setChannelWidth('40'));
+          createBtn(ES_CONF.TEXT.menu20M, () => WifiOperator.setChannelWidth('20'));
 
           let div2 = div1.cloneNode();
           contentDiv.appendChild(div2);
 
-          createBtn(TY_CONF.TEXT.menuRadar, () => RadarModal.scanAndRender());
+          createBtn(ES_CONF.TEXT.menuRadar, () => RadarModal.scanAndRender());
 
           this.panel.appendChild(contentDiv);
         }
@@ -1439,7 +1473,7 @@
       }
     }
 
-    const app = new TianyiController();
+    const app = new eSurfingController();
     setTimeout(() => app.init(), 1000);
   };
 

@@ -2,7 +2,7 @@
 
 [![GreasyFork Version](https://img.shields.io/greasyfork/v/583456.svg)](https://greasyfork.org/zh-CN/scripts/583456)
 
-> 🚀 **重塑旧时光**：专为 2016 年代老旧天翼光猫（电信网关）打造的现代化前端UI。通过底层 API 嗅探、DOM 荧光染色溯源、`Chart.js` 原型链劫持等技术，接管并重构了原生极其简陋且 Bug 频出的光猫管理页面。
+> 🚀 **重塑旧时光**：专为 2016 年代老旧天翼光猫（电信网关）打造的现代化前端UI，接管并重构了原生极其简陋且 Bug 频出的光猫管理页面。
 
 ![预览图片](./assets/main.png)
 
