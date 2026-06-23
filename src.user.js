@@ -1333,8 +1333,8 @@
       }
 
       init() {
-        const isLoginPage = window.location.pathname.toLowerCase().includes('login') ||
-          (document.querySelector('input[type="password"]') && window.frames.length === 0);
+        // 登录页 URL: http://192.168.1.1/cgi-bin/index2.asp
+        const isLoginPage = window.location.pathname.toLowerCase().includes('index2.asp');
         if (isLoginPage) return;
 
         StyleManager.inject();
