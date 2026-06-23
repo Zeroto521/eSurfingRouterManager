@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         天翼路由器控制台
 // @namespace    http://tampermonkey.net/
-// @version      v0.1.0
+// @version      v0.2.0
 // @description  专为 2016 年代老旧天翼光猫（电信网关）打造的现代化前端UI，接管并重构了原生极其简陋且 Bug 频出的光猫管理页面。
 // @author       40% (Zeroto521) via Gemini
 // @license      MIT
