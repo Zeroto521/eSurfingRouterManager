@@ -6,7 +6,7 @@
 // @author       40% (Zeroto521) via Gemini
 // @license      MIT
 // @match        http://192.168.1.1/*
-// @icon         data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🎛️</text></svg>
+// @icon         data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><text y=".9em" font-size="90">🎛️</text></svg>
 // @license      MIT
 // @homepageURL  https://github.com/Zeroto521/eSurfingRouterManager
 // @supportURL   https://github.com/Zeroto521/eSurfingRouterManager
