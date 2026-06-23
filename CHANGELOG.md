@@ -2,7 +2,7 @@
 
 > 所有对该项目的显著更改都将记录在此文件中。本项目遵循 [语义化版本控制 (Semantic Versioning)](https://semver.org/lang/zh-CN/)。
 
-## Unreleased
+## v0.2.0 - 2026-06-23
 
 ### Fixed
 
